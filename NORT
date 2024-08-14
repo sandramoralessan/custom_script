@@ -1,6 +1,175 @@
 %%%%%%%
 %Author: Sandra Morales Sanchez
 %Version: 1.0
-%Matlab version: 2023b
-%date: 18-08-2024ç
+%Matlab version: R2023b
+%Date: 18-08-2024
+%Video analysis to track mouse movements within MWM and NORT, utilizing a combination of video processing, area definition and heatmap generation for spatial analysis. This methodology was designed to quantify the time spent by the mouse in specific regions, providing insights into spatial navigation and memory.
+
 %%%%%%
+
+VideoObj = VideoReader("X.mp4");
+frame = readFrame(VideoObj);
+num_pixels = uint16(VideoObj.Duration * VideoObj.FrameRate);
+
+% Display the first frame and select ROIs
+fig = figure;
+imshow(frame);
+title('Select 1 to 4 ROIs');
+
+% Get the number of ROIs from the user
+num_rois = str2double(inputdlg('Enter the number of ROIs (1 to 4):', 'Number of ROIs', [1 35], {'1'}));
+if isnan(num_rois) || num_rois < 1 || num_rois > 4
+    error('Invalid number of ROIs. Must be between 1 and 4.');
+end
+
+% Store ROIs
+masks = {};
+roi_coords = {};
+setappdata(fig, "roi_selection_done", false);
+while length(masks) < num_rois && ~getappdata(fig, "roi_selection_done")
+    h = drawpolygon('Color', 'r');
+    if ~isempty(h) && ~isempty(h.Position)
+        roi_coords{end+1} = h.Position;
+        masks{end+1} = poly2mask(h.Position(:,1), h.Position(:,2), size(frame, 1), size(frame, 2));
+    end
+end
+
+% Select two areas within each ROI
+areas = cell(num_rois, 2);
+area_coords = cell(num_rois, 2);
+for roi_idx = 1:num_rois
+    figure; imshow(frame);
+    title(sprintf('Select two areas within ROI %d', roi_idx));
+    for area_idx = 1:2
+        h = drawpolygon('Color', 'w');
+        if ~isempty(h) && ~isempty(h.Position)
+            area_coords{roi_idx, area_idx} = h.Position;
+            areas{roi_idx, area_idx} = poly2mask(h.Position(:,1), h.Position(:,2), size(frame, 1), size(frame, 2));
+        end
+    end
+    close(gcf);
+end
+
+% Initialize mouse positions for each ROI
+mouse_pos = cell(num_rois, 1);
+coords = cell(num_rois, 1);
+for roi_idx = 1:num_rois
+    mouse_pos{roi_idx} = [];
+    mask = masks{roi_idx};
+    masked_frame = frame;
+    masked_frame(~mask) = 0;
+    figure; imshow(masked_frame);
+    title(sprintf('Select mice in ROI %d and press Enter when done', roi_idx));
+    while true
+        [x, y, button] = ginput(1);
+        if isempty(button) || button == 13
+            break;
+        end
+        mouse_pos{roi_idx} = [mouse_pos{roi_idx}; x, y];
+        hold on; plot(x, y, 'ro', 'MarkerSize', 10, 'LineWidth', 2); hold off;
+    end
+    close(gcf);
+end
+
+% Initialize tracking data
+for i = 1:num_rois
+    num_mice = size(mouse_pos{i}, 1);
+    coords{i} = cell(num_mice, 1);
+    for j = 1:num_mice
+        coords{i}{j} = zeros(num_pixels-20, 2);
+        coords{i}{j}(1, :) = mouse_pos{i}(j, :);
+    end
+end
+
+% Track mice in the video
+time_in_areas = zeros(num_rois, 2);
+for k = 2:(num_pixels-20)
+    frame = readFrame(VideoObj);
+    for roi_idx = 1:num_rois
+        mask = masks{roi_idx};
+        masked_frame = frame;
+        masked_frame(~mask) = 0;
+        I = tracker_nor1(masked_frame);
+        I(~mask) = 0;
+        I2 = imopen(imclearborder(I), strel("disk", 1));
+        objects = regionprops(bwlabel(I2), 'Centroid');
+        centroids = cat(1, objects.Centroid);
+        for mouse_idx = 1:size(mouse_pos{roi_idx}, 1)
+            if isempty(centroids)
+                coords{roi_idx}{mouse_idx}(k, :) = coords{roi_idx}{mouse_idx}(k-1, :);
+            else
+                dists = sqrt(sum((coords{roi_idx}{mouse_idx}(k-1, :) - centroids) .^ 2, 2));
+                [min_dist, idx] = min(dists);
+                if min_dist > 250
+                    coords{roi_idx}{mouse_idx}(k, :) = coords{roi_idx}{mouse_idx}(k-1, :);
+                else
+                    coords{roi_idx}{mouse_idx}(k, :) = centroids(idx, :);
+                end
+            end
+
+            % Check if the mouse is within the selected areas
+            x = round(coords{roi_idx}{mouse_idx}(k, 1));
+            y = round(coords{roi_idx}{mouse_idx}(k, 2));
+            if x > 0 && y > 0 && x <= size(frame, 2) && y <= size(frame, 1)
+                for area_idx = 1:2
+                    if areas{roi_idx, area_idx}(y, x)
+                        time_in_areas(roi_idx, area_idx) = time_in_areas(roi_idx, area_idx) + 1;
+                    end
+                end
+            else
+                coords{roi_idx}{mouse_idx}(k, :) = coords{roi_idx}{mouse_idx}(k-1, :);
+            end
+        end
+
+        % Visualize tracking in real-time
+        imshow(I2); hold on;
+        for mouse_idx = 1:size(mouse_pos{roi_idx}, 1)
+            plot(coords{roi_idx}{mouse_idx}(1:k,1), coords{roi_idx}{mouse_idx}(1:k,2), 'r-', 'LineWidth', 2);
+            plot(coords{roi_idx}{mouse_idx}(k,1), coords{roi_idx}{mouse_idx}(k,2), 'rx', 'MarkerSize', 10);
+        end
+        hold off;
+        pause(0.000000001);
+    end
+end
+
+% Display results
+disp('Time spent in areas (seconds):');
+for roi_idx = 1:num_rois
+    fprintf('ROI %d:\n', roi_idx);
+    for area_idx = 1:2
+        fprintf('  Area %d: %.2f seconds\n', area_idx, time_in_areas(roi_idx, area_idx) / VideoObj.FrameRate);
+    end
+end
+
+% Generate and display the heatmap
+frame_size = [size(frame, 1), size(frame, 2)];
+heatmap = zeros(frame_size);
+density_map = zeros(frame_size);
+for roi_idx = 1:num_rois
+    for mouse_idx = 1:size(mouse_pos{roi_idx}, 1)
+        for k = 1:(num_pixels-20)
+            x = round(coords{roi_idx}{mouse_idx}(k, 1));
+            y = round(coords{roi_idx}{mouse_idx}(k, 2));
+            if x > 0 && y > 0 && x <= frame_size(2) && y <= frame_size(1)
+                heatmap(y, x) = heatmap(y, x) + 1;
+                density_map(y, x) = density_map(y, x) + 1;
+            end
+        end
+    end
+end
+
+% Smooth and enhance the heatmap
+heatmap = imgaussfilt(heatmap / max(heatmap(:)) * 10, 10);
+density_map = imgaussfilt(density_map / max(density_map(:)) * 10, 10);
+heatmap_rgb = ind2rgb(gray2ind(heatmap, 256), jet(256));
+heatmap_rgb(:,:,3) = heatmap_rgb(:,:,3) * 20;
+combined_image = bsxfun(@times, im2double(frame), 1 - 0.5) + bsxfun(@times, heatmap_rgb, 0.5);
+
+% Show the final combined image with heatmap overlay
+figure; imshow(combined_image);
+title('Heatmap Overlay on Final Video Frame');
+
+% Display color legend
+figure; colormap('jet'); colorbar; caxis([0 1]);
+imagesc(heatmap); colorbar;
+
