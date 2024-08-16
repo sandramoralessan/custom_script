@@ -2,7 +2,7 @@
 
 %Author: Sandra Morales Sanchez
 %Matlab version: R2023b
-%Date: 18-08-2024
+%Date: 25-07-2024
 %Video analysis to track mouse movements within MWM and NORT, utilizing a combination of video processing, area definition and heatmap generation for spatial analysis. This methodology was designed to quantify the time spent by the mouse in specific regions, providing insights into spatial navigation and memory.
 
 %%%%%%
