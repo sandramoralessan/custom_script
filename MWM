@@ -5,7 +5,7 @@
 %Video analysis to track mouse movements within MWM and NORT, utilizing a combination of video processing, area definition and heatmap generation for spatial analysis. This methodology was designed to quantify the time spent by the mouse in specific regions, providing insights into spatial navigation and memory.
 
 % Load the video
-VideoObj = VideoReader("../Videos/25.mp4");
+VideoObj = VideoReader("X.mp4");
 frame = VideoObj.readFrame;
 
 % Initialize pixel count
