@@ -11,8 +11,6 @@
 % Load the video
 VideoObj = VideoReader("X.mp4");
 frame = VideoObj.readFrame;
-
-% Initialize pixel count
 num_pixels = uint16(VideoObj.Duration * VideoObj.FrameRate);
 
 % Initialize coordinates
@@ -31,7 +29,7 @@ for k = 1:num_pixels
        coordinates(k, :) = [x, y];
    else
        frame = VideoObj.readFrame;
-       I = tracker_morris25(frame); % Color threshold tracker
+       I = tracker_morris(frame); % Color threshold tracker
        ee = strel("disk", 3); % Morphological operation
        I2 = imopen(I, ee);
        I2 = imclearborder(I2);
@@ -74,6 +72,7 @@ imshow(frame);
 hold on;
 plot(coordinates(:, 1), coordinates(:, 2), 'LineWidth', 3, 'Color', "red");
 
+
 % Create heatmap
 frame = read(VideoObj, Inf);
 heatmap = zeros(size(frame, 1), size(frame, 2));
@@ -104,7 +103,7 @@ density_map(density_map > 1) = 1;
 heatmap_rgb = ind2rgb(gray2ind(heatmap, 256), jet(256));
 frame_double = im2double(frame);
 
-transparency_factor = 0.3;
+transparency_factor = 0.45;
 combined_image = bsxfun(@times, frame_double, 1 - transparency_factor) + ...
                  bsxfun(@times, heatmap_rgb, transparency_factor);
 
@@ -145,7 +144,7 @@ y_circ = pool_radius * sin(theta) + center_pool(2);
 
 plot(x_circ, y_circ, 'w-', 'LineWidth', 2);
 
-plot([marks(1, 1), center_pool(1)], [marks(1, 2), center_pool(2)], 'w-', 'LineWidth', 2);
+plot([marks(1, 1), center_pool(1)], [marks(1, 2), center_pool(2)], 'r-', 'LineWidth', 2);
 plot([marks(4, 1), center_pool(1)], [marks(4, 2), center_pool(2)], 'r-', 'LineWidth', 2);
 
 hold off;
