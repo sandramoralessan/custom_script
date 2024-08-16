@@ -7,6 +7,7 @@
 
 %%%%%%
 
+% Load the video
 VideoObj = VideoReader("X.mp4");
 frame = readFrame(VideoObj);
 num_pixels = uint16(VideoObj.Duration * VideoObj.FrameRate);
