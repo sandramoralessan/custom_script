@@ -13,11 +13,9 @@ VideoObj = VideoReader("X.mp4");
 frame = VideoObj.readFrame;
 num_pixels = uint16(VideoObj.Duration * VideoObj.FrameRate);
 
-% Initialize coordinates
+% Initialize tracking data
 coordinates = ones(num_pixels, 2);
-
-for k = 1:num_pixels
-  
+for k = 1:num_pixels 
    if k == 1
        frame = VideoObj.readFrame;
        imshow(frame);
